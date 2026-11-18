@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>電子投票</title>
+<style>
+/* デジタル庁デザインシステムのトークン（色・角丸・フォーカスリング）に準拠 */
+:root{--blue:#0017c1;--blue-h:#00118f;--blue-bg:#e8f1fe;--g900:#1a1a1a;--g700:#4d4d4d;--g500:#7b7b7b;--g300:#b3b3b3;--g50:#f2f2f2;--red:#ec0000;--red-bg:#fdeeee;--green:#197a4b;--yellow:#ffd43d}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic",sans-serif;color:var(--g900);background:#fff;line-height:1.7;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+#app{height:100dvh;display:grid;grid-template-rows:auto 1fr auto;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+header,footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 24px;min-height:64px}
+header{border-bottom:1px solid var(--g300)}
+footer{border-top:1px solid var(--g300);font-size:18px}
+.ttl{font-size:18px;font-weight:700}
+main{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:24px;padding:16px 32px;text-align:center;min-height:0}
+h1{font-size:36px;line-height:1.4;font-weight:700}
+h2{font-size:30px;line-height:1.4;font-weight:700}
+.lead{font-size:24px;color:var(--g700)}
+.live::before{content:"";display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--green);margin-right:8px;vertical-align:-1px}
+.b{font:inherit;font-size:20px;font-weight:700;min-height:56px;padding:8px 32px;border-radius:8px;border:4px solid transparent;cursor:pointer;background:#fff;color:var(--g900)}
+.p{background:var(--blue);color:#fff}.p:active{background:var(--blue-h)}
+.o{border-color:var(--blue);color:var(--blue)}
+.t{border-color:transparent;color:var(--blue);text-decoration:underline;padding:8px 12px}
+.d{border-color:var(--g500);color:var(--g900);font-size:18px;min-height:48px}
+.xl{font-size:30px;min-height:96px;padding:12px 72px}
+.b:focus-visible{outline:4px solid #000;outline-offset:2px;box-shadow:0 0 0 6px var(--yellow)}
+.b[disabled]{background:var(--g50);color:var(--g500);border-color:var(--g300);cursor:not-allowed}
+.steps{display:flex;gap:8px;list-style:none;padding:0;font-size:16px;width:100%;max-width:920px}
+.steps li{flex:1;padding:6px 4px;border-bottom:6px solid var(--g300);color:var(--g700)}
+.steps li.on{border-color:var(--blue);color:var(--blue);font-weight:700}
+.steps li.ok{border-color:var(--g900);color:var(--g900)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;width:100%;max-width:920px}
+.cand{font-size:30px;min-height:120px;border:4px solid var(--blue);color:var(--blue);background:#fff;border-radius:8px}
+.cand:active{background:var(--blue-bg)}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px}
+.dlg{background:#fff;border-radius:16px;padding:40px;max-width:680px;width:100%;display:flex;flex-direction:column;gap:24px;text-align:center}
+.nm{font-size:44px;font-weight:700}
+.row{display:flex;gap:48px;justify-content:center}
+.row .b{flex:1;max-width:260px}
+.sum{width:100%;max-width:720px;border-collapse:collapse;font-size:26px;text-align:left}
+.sum td{padding:10px 16px;border-bottom:1px solid var(--g300)}
+.sum td:first-child{font-size:18px;color:var(--g700);width:46%}
+.sum b{font-weight:700}
+.note{border:3px solid var(--blue);background:var(--blue-bg);border-radius:8px;padding:12px 20px;text-align:left;font-size:18px;max-width:720px}
+.err{border-color:var(--red);background:var(--red-bg);color:#860000}
+.fin{display:flex;justify-content:space-between;width:100%;max-width:720px}
+.big{font-size:56px;color:var(--green)}
+.adm{align-items:stretch;text-align:left;overflow:auto;justify-content:flex-start;gap:16px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.card{border:1px solid var(--g300);border-radius:8px;padding:12px 16px}
+.card b{font-size:32px;display:block}
+.tl{font-size:16px;border-collapse:collapse;width:100%}
+.tl td,.tl th{border-bottom:1px solid var(--g300);padding:4px 8px;text-align:left;font-weight:400}
+.tl th{color:var(--g700)}
+.acts{display:flex;flex-wrap:wrap;gap:12px}
+input{font:inherit;font-size:20px;padding:10px 12px;border:2px solid var(--g500);border-radius:8px;min-height:48px;-webkit-user-select:text;user-select:text}
+input:focus-visible{outline:4px solid #000;outline-offset:2px;box-shadow:0 0 0 6px var(--yellow)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="ov" hidden></div>
+<script>
+// ===== 設定（GASのURLだけ。候補者・パスワード等はスプレッドシート側） =====
+const C={gas:'',name:'',eid:'',open:true,R:[]};
+const ROLES=[['男子委員長候補者','委員長（高3男子）'],['女子委員長候補者','委員長（高3女子）'],['男子副委員長候補者','副委員長（高2男子）'],['女子副委員長候補者','副委員長（高2女子）']];
+
+// ===== iPad内保存（IndexedDB）=====
+const db=new Promise((ok,ng)=>{const q=indexedDB.open('vote',1);q.onupgradeneeded=()=>q.result.createObjectStore('votes',{keyPath:'id'});q.onsuccess=()=>ok(q.result);q.onerror=()=>ng(q.error)});
+// oncomplete = ディスクへの書き込み完了。ここを待ってから完了画面を出す
+const tx=async(m,f)=>{const d=await db;return new Promise((ok,ng)=>{const t=d.transaction('votes',m),r=f(t.objectStore('votes'));t.oncomplete=()=>ok(r.result);t.onerror=t.onabort=()=>ng(t.error)})};
+const put=r=>tx('readwrite',s=>s.put(r)), all=()=>tx('readonly',s=>s.getAll());
+navigator.storage&&navigator.storage.persist&&navigator.storage.persist();
+const dev=localStorage.dev||(localStorage.dev=Math.random().toString(36).slice(2,10));
+
+// ===== GASへ送信（失敗しても票は端末に残る。投票ID＋GAS側で重複排除）=====
+const post=b=>fetch(C.gas,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)}).then(r=>r.json());
+function setCfg(j){C.name=j.name;C.eid=j.eid;C.open=j.open;C.R=ROLES.map((r,i)=>[r[0],r[1],j.cands[i].slice().sort((a,b)=>a.localeCompare(b,'ja'))]);return{}}
+async function load(){ // 設定を取得してiPadに保存。オフラインなら保存済みを使う
+  if(!C.gas)return{err:'nogas'};
+  try{const j=await (await fetch(C.gas+'?dev='+dev)).json();if(j.err)return j;localStorage.cfg=JSON.stringify(j);return setCfg(j)}
+  catch(e){const c=localStorage.cfg;return c?setCfg(JSON.parse(c)):{err:'offline'}}
+}
+async function flush(){
+  if(!C.gas)return{n:0,err:'GASのURLが未設定です'};
+  const u=(await all()).filter(r=>!r.sent); if(!u.length)return{n:0};
+  try{
+    const j=await post({a:'vote',dev,votes:u});
+    if(j.err)return{n:0,err:j.err=='closed'?'受付がOFFです（スプレッドシートの「受付」をONにしてください）':'この端末は未登録です（端末ID：'+dev+'）'};
+    let n=0; for(const x of u) if((j.ids||[]).includes(x.id)){x.sent=1;await put(x);n++}
+    return{n};
+  }catch(e){return{n:0,err:'送信できませんでした。Wi-Fiを確認して、もう一度「データを回収する」を押してください'}}
+}
+setInterval(()=>flush().catch(()=>{}),30000);
+
+// ===== 画面 =====
+const $=document.getElementById('app'),ov=document.getElementById('ov');
+let S={sel:[],i:0,t0:0},tm;
+const page=(h,m,f)=>{ov.hidden=true;$.innerHTML=`<header><span class="ttl">${C.name}</span>${h||'<span></span>'}</header><main class="${m.c||''}">${m.h}</main><footer>${f===undefined?'<span class="live">投票受付中</span><button class="b t" data-a="adm">管理者</button>':f}</footer>`};
+const quitBtn='<button class="b d" data-a="quit">投票せずに終了</button>';
+const show=h=>{ov.innerHTML=`<div class="ov"><div class="dlg">${h}</div></div>`;ov.hidden=false};
+function start(){clearTimeout(tm);S={sel:[],i:0,t0:0};load();
+  if(!C.open)return page('',{h:`<h1>${C.name}</h1><p class="lead">ただいま投票を受け付けていません</p>`});
+  page('',{h:`<h1>${C.name}</h1><p class="lead">投票に進みます</p><button class="b p xl" data-a="go">投票を開始</button>`})}
+async function boot(){
+  page('',{h:'<p class="lead">読み込み中…</p>'},'<span></span><span></span>');
+  const r=await load(),f='<span></span><span></span>';
+  if(r.err=='unreg')return page('',{h:`<h2>この端末は未登録です</h2><p class="lead">管理者に、次の端末IDを伝えてください</p><p class="nm">${dev}</p><button class="b o" data-a="boot">もう一度確認</button>`},f);
+  if(r.err)return page('',{h:`<h2>設定を読み込めません</h2><p class="lead">${r.err=='nogas'?'GASのURLが未設定です':'Wi-Fiを確認してください'}</p><button class="b o" data-a="boot">もう一度試す</button>`},f);
+  start();
+}
+function pick(){
+  const [t,,cs]=C.R[S.i];
+  const st=C.R.map((r,k)=>`<li class="${k<S.i?'ok':k==S.i?'on':''}">${k<S.i?'✓ ':''}${r[1]}</li>`).join('');
+  page(quitBtn,{h:`<ol class="steps">${st}</ol><h2>${t}を選んでください</h2><div class="grid">${cs.map((n,k)=>`<button class="b cand" data-a="ask" data-k="${k}">${n}</button>`).join('')}</div>`},`<span class="live">投票受付中</span><span>${S.i+1} / 4</span>`);
+}
+function ask(d){const n=C.R[S.i][2][d.k];S.c=n;show(`<p class="lead">この方を選びますか？</p><p class="nm">${n}</p><div class="row"><button class="b o" data-a="no">いいえ</button><button class="b p" data-a="yes">はい</button></div>`)}
+function yes(){S.sel[S.i]=S.c;ov.hidden=true;++S.i<4?pick():confirm4()}
+function confirm4(){
+  page(quitBtn,{h:`<h2>この方たちに投票しますか？</h2><table class="sum">${C.R.map((r,k)=>`<tr><td>${r[1]}</td><td><b>${S.sel[k]}</b></td></tr>`).join('')}</table><p class="note">「投票する」を押すと、現在表示している候補者に投票します。押した後は選びなおすことはできません。</p><div class="fin"><button class="b o xl" data-a="redo">選び直す</button><button class="b p xl" data-a="vote" id="vb">投票する</button></div>`},`<span class="live">投票受付中</span>`);
+}
+async function vote(b){
+  b.disabled=true;
+  const r={id:crypto.randomUUID(),eid:C.eid,dev,t0:S.t0,t1:Date.now(),v:S.sel.slice(),sent:0};
+  try{await put(r)}catch(e){b.disabled=false;return show(`<p class="note err">この端末に保存できませんでした。係の人に知らせてください。（投票は完了していません）</p><button class="b p" data-a="no">閉じる</button>`)}
+  page('',{h:`<p class="big">✓</p><h1>投票が完了しました</h1><p class="lead">そのまま席にお戻りください</p>`},'<span></span><span></span>');
+  tm=setTimeout(start,6000); flush().catch(()=>{});
+}
+// ===== 管理者 =====
+function login(err){page('<button class="b d" data-a="home">投票画面へ戻る</button>',{h:`<h2>管理者ログイン</h2><label>パスワード<br><input id="pw" type="password" autocomplete="off"></label>${err?`<p class="note err">${err==1?'パスワードが違います':'通信できません。Wi-Fiを確認してください'}</p>`:''}<button class="b p" data-a="login">ログイン</button>`},'<span></span><span></span>')}
+async function admin(msg){
+  const a=await all(),un=a.filter(r=>!r.sent).length;
+  const tl=C.R.map((r,i)=>`<table class="tl"><tr><th colspan="2">${r[1]}（この端末）</th></tr>${r[2].map(n=>`<tr><td>${n}</td><td>${a.filter(v=>v.v[i]==n).length}票</td></tr>`).join('')}</table>`).join('');
+  page('<button class="b d" data-a="home">投票画面へ戻る</button>',{c:'adm',h:`<h2>管理画面</h2>${msg?`<p class="note ${msg.err?'err':''}">${msg.t}</p>`:''}<div class="cards"><div class="card">この端末の投票数<b>${a.length}</b></div><div class="card">未送信<b>${un}</b></div><div class="card">端末ID<b style="font-size:22px">${dev}</b></div></div><div class="acts"><button class="b p" data-a="sync">データを回収する</button><button class="b o" data-a="remote">全端末の集計を見る</button><button class="b o" data-a="exp">JSONバックアップ</button></div><div id="rm"></div><div class="cards">${tl}</div>`},'<span></span><span></span>');
+}
+async function remote(){
+  const el=document.getElementById('rm');
+  try{const j=await post({a:'tally',pw:S.pw,eid:C.eid});if(j.err)throw 0;
+    el.innerHTML=`<p class="note">全端末の合計：<b>${j.total}</b>票（送信済みのみ）</p><div class="cards">${C.R.map((r,i)=>`<table class="tl"><tr><th colspan="2">${r[1]}</th></tr>${r[2].map(n=>`<tr><td>${n}</td><td>${j.tally[i][n]||0}票</td></tr>`).join('')}</table>`).join('')}</div>`}
+  catch(e){el.innerHTML='<p class="note err">全体集計を取得できません（Wi-Fiを確認してください）</p>'}
+}
+async function exp(){
+  const u=URL.createObjectURL(new Blob([JSON.stringify(await all(),null,1)],{type:'application/json'})),a=document.createElement('a');
+  a.href=u;a.download=`votes-${dev}-${Date.now()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(u),5000);
+}
+// ===== 操作の振り分け =====
+const A={
+  go:()=>{S.t0=Date.now();pick()},ask,yes:b=>yes(b),no:()=>ov.hidden=true,
+  redo:()=>{S.sel=[];S.i=0;pick()},vote,
+  quit:()=>show(`<p class="lead">投票せずに終了します。<br>本当に終了しますか？<br>この操作は取り消せません</p><div class="row"><button class="b o" data-a="no">戻る</button><button class="b p" data-a="home">終了する</button></div>`),
+  home:start,adm:()=>login(),
+  login:async()=>{const pw=document.getElementById('pw').value;try{const j=await post({a:'login',pw});if(j.ok){S.pw=pw;admin()}else login(1)}catch(e){login(2)}},
+  sync:async()=>{const r=await flush();admin(r.err?{t:r.err,err:1}:{t:`${r.n}件を送信しました`})},
+  remote,exp,boot
+};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b)A[b.dataset.a](['yes','vote'].includes(b.dataset.a)?b:b.dataset)});
+boot();
+</script>
+</body>
+</html>
